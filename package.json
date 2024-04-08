@@ -1,0 +1,12 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@types/imagemin": "^8.0.5",
+    "@types/imagemin-webp": "^7.0.3",
+    "imagemin": "^8.0.1",
+    "imagemin-webp": "^8.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.4"
+  }
+}
