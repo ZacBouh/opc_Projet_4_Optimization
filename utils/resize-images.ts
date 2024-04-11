@@ -1,6 +1,8 @@
 import path from "path";
 import sharp from "sharp";
 import fs from "fs/promises";
+import { Dirent } from "fs";
+import { getSubdirectories, listFolders } from "./lib.js";
 
 type ImagesList = {
   imagesList: { path: string; srcset: string }[];
@@ -12,8 +14,10 @@ type Srcset = {
 };
 
 const PROJECT_PATH =
-  "F:\\Formation Openclassrooms\\Projet_4_Optimisation\\nina-carducci.github.io\\";
-const entryPath = path.resolve(process.argv[2]);
+  "F:\\Formation Openclassrooms\\Projet_4_Optimisation\\nina-carducci.github.io";
+
+const inputPath = path.resolve(process.argv[2]);
+const outputPath = path.resolve(process.argv[3]);
 
 const listOfImages: ImagesList["imagesList"] = JSON.parse(
   await fs.readFile("imagesAndSrcsets.json", {
@@ -27,38 +31,86 @@ const imagesWithSrcset = listOfImages.map(async (imageObject) => {
     const xY = dimension.split("x");
     return { width: Number(xY[0]), height: Number(xY[1]) };
   });
-  console.log(imagePath);
-  console.log(dimensionsList);
+  //   console.log(imagePath);
+  //   console.log(dimensionsList);
   return { path: imagePath, srcset: dimensionsList };
 });
 
-function resizeImage(path: string, srcset: Srcset, outpath: string) {
-  sharp(path)
+function resizeImage(imagePath: string, srcset: Srcset, outpath: string) {
+  sharp(imagePath)
     .resize(srcset.width, srcset.height, { fit: "outside" })
-    .toFile(outpath);
+    .toFile(outpath)
+    .then(() => {
+      const basePath =
+        path.dirname(outpath).split("\\").slice(-3).join("\\") + "\\";
+      console.log("resized image : ", basePath + path.basename(imagePath));
+    });
 }
 
-imagesWithSrcset.map(async (imageObject) => {
-  const image = await imageObject;
-  const isDirectory = (await fs.stat(image.path)).isDirectory();
-  if (!isDirectory) {
-    image.srcset.map((srcset) => {
-      console.log(
-        `compressing ${path.basename(image.path)} to ${srcset.width}x${
-          srcset.height
-        }`
-      );
-      resizeImage(
-        image.path,
-        srcset,
-        path.join(
-          path.dirname(image.path),
-          path.basename(image.path),
-          `${srcset.width}x${srcset.height}`,
-          path.extname(image.path)
-        )
-      );
-    });
-    return;
+async function getImagesInFolder(
+  folderPath: string,
+  extension: "jpg" | "png" | "webp"
+) {
+  let folderContent: string[];
+  try {
+    folderContent = await fs.readdir(folderPath);
+    const images = folderContent.filter(
+      (itemPath) => path.extname(itemPath) === "." + extension
+    );
+    const imagesPaths = images.map((imageBasename) =>
+      path.join(folderPath, imageBasename)
+    );
+    return imagesPaths;
+  } catch (error) {
+    console.log("could not get images in folder ", folderPath);
+    console.log(error);
   }
-});
+}
+
+async function getImageSrcSet(imagePath: string) {
+  const imageName = path
+    .basename(imagePath)
+    .replace(path.extname(imagePath), "");
+  const imageSpecs = await Promise.all(imagesWithSrcset);
+  const fileSpecified = imageSpecs.filter((imageSpec) => {
+    const imageSpecName = path
+      .basename(imageSpec.path)
+      .replace(path.extname(imageSpec.path), "");
+    return imageSpecName === imageName;
+  });
+  if (fileSpecified.length > 0) return fileSpecified;
+  const folderSpecs = (await Promise.all(imagesWithSrcset)).filter(
+    (imageSpec) => {}
+  );
+}
+
+function getOutputPath(outputPath: string, inputPath: string) {
+  const outpath = [
+    outputPath,
+    path.basename(path.dirname(inputPath)),
+    path.basename(inputPath),
+  ].join(path.sep);
+  return outpath;
+}
+
+// console.log("got this output path ", getOutputPath(outputPath, inputPath));
+
+const folders = await listFolders([inputPath]);
+let imagesPathPerFolder = folders?.map(
+  async (folderPath) => await getImagesInFolder(folderPath, "webp")
+);
+
+if (imagesPathPerFolder) {
+  const imagesPaths = (await Promise.all(imagesPathPerFolder)).reduce(
+    (previous, current) => previous && current && [...previous, ...current]
+  );
+  imagesPaths?.map(async (imagePath) => {
+    // console.log(getOutputPath(outputPath, imagePath));
+    console.log(await getImageSrcSet(imagePath));
+  });
+}
+
+// getImagesInFolder(process.argv[2], "webp");
+
+// console.log(imagesWithSrcset);
+// resizeImagesFolder(outpath);
