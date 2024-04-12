@@ -36,15 +36,25 @@ const imagesWithSrcset = listOfImages.map(async (imageObject) => {
   return { path: imagePath, srcset: dimensionsList };
 });
 
-function resizeImage(imagePath: string, srcset: Srcset, outpath: string) {
-  sharp(imagePath)
-    .resize(srcset.width, srcset.height, { fit: "outside" })
-    .toFile(outpath)
-    .then(() => {
-      const basePath =
-        path.dirname(outpath).split("\\").slice(-3).join("\\") + "\\";
-      console.log("resized image : ", basePath + path.basename(imagePath));
-    });
+async function resizeImage(imagePath: string, srcset: Srcset, outpath: string) {
+  try {
+    await fs.mkdir(path.dirname(outpath), { recursive: true });
+    sharp(imagePath)
+      .resize(srcset.width, srcset.height, { fit: "outside" })
+      .toFile(
+        outpath.replace(path.extname(outpath), "") +
+          `${srcset.width}x${srcset.height}` +
+          path.extname(outpath)
+      )
+      .then(() => {
+        const basePath =
+          path.dirname(outpath).split("\\").slice(-3).join("\\") + "\\";
+        console.log("resized image : ", basePath + path.basename(imagePath));
+      });
+  } catch (error) {
+    console.log(`[ERROR] could not resize file ${imagePath}`);
+    console.log(error);
+  }
 }
 
 async function getImagesInFolder(
@@ -78,10 +88,16 @@ async function getImageSrcSet(imagePath: string) {
       .replace(path.extname(imageSpec.path), "");
     return imageSpecName === imageName;
   });
-  if (fileSpecified.length > 0) return fileSpecified;
-  const folderSpecs = (await Promise.all(imagesWithSrcset)).filter(
-    (imageSpec) => {}
-  );
+  if (fileSpecified.length > 0) {
+    console.log("image ", imageName, " specified as : ");
+    return fileSpecified[0].srcset;
+  }
+  const folderSpecified = imageSpecs.filter((imageSpec) => {
+    // console.log('imageSpecDir ', imagePath, ' includes ', (imagePath))
+    return path.dirname(imagePath).includes(imageSpec.path);
+  });
+  if (folderSpecified.length > 0) return folderSpecified[0].srcset;
+  return undefined;
 }
 
 function getOutputPath(outputPath: string, inputPath: string) {
@@ -106,7 +122,9 @@ if (imagesPathPerFolder) {
   );
   imagesPaths?.map(async (imagePath) => {
     // console.log(getOutputPath(outputPath, imagePath));
-    console.log(await getImageSrcSet(imagePath));
+    (await getImageSrcSet(imagePath))?.map((srcset) => {
+      resizeImage(imagePath, srcset, getOutputPath(outputPath, imagePath));
+    });
   });
 }
 
